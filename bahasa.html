@@ -812,7 +812,6 @@
         </div>
 
         <div id="response"></div>
-        <div id="language-display" class="language-indicator">Detected language: -</div>
         <div id="typing-status" class="typing-indicator">Thinking and typing...</div>
         <textarea id="user-input" placeholder="Type your message here... (Supports multiple lines and languages)"></textarea>
 
@@ -834,41 +833,36 @@
             <h3>Typing Speed Configuration (ms)</h3>
             <div id="language-configs">
                 </div>
-            <p style="font-size: 12px; color: #6c757d; margin-top: 0; margin-bottom: 15px; line-height: 1.4;">Adjust these values to change typing speed per language. Base Speed is delay per character (Latin) or block (CJK). Pause Multiplier affects pauses between blocks/sentences.</p>
+            <p style="font-size: 12px; color: #6c757d; margin-top: 0; margin-bottom: 15px; line-height: 1.4;">Adjust these values to change typing speed per character and pauses for punctuation/symbols.</p>
 
             <div class="dark-mode-toggle">
                 <button onclick="toggleDarkMode()"><i class="fas fa-moon"></i> Toggle Dark Mode</button> </div>
         </div>
 
     </div>
-
     <script>
-        // Typing Speed Configuration Variables (Easily adjustable here)
-        const LANGUAGE_CONFIGS = {
-            ENGLISH: {name: 'English', baseSpeed: 30, pauseMultiplier: 1.0},
-            CHINESE: {name: 'Chinese', baseSpeed: 150, pauseMultiplier: 1.4}, // CJK uses baseSpeed per block
-            JAPANESE: {name: 'Japanese', baseSpeed: 180, pauseMultiplier: 1.6}, // CJK uses baseSpeed per block
-            KOREAN: {name: 'Korean', baseSpeed: 120, pauseMultiplier: 1.3}, // CJK uses baseSpeed per block
-            MIXED: {name: 'Mixed', baseSpeed: 80, pauseMultiplier: 1.2} // CJK uses baseSpeed per block
+        const GLOBAL_TYPING_CONFIG = {
+            name: 'Global',
+            baseSpeed: 60,
+            punctuationPauseMultiplier: 7.0,
+            languageSpeeds: {
+                'JAPANESE': 180,
+                'CHINESE': 180,
+                'KOREAN': 150,
+                'ENGLISH': 60,
+                'LATIN': 60
+            }
         };
-
-        // Typing state management
+    
         let isTyping = false;
         let isPaused = false;
         let currentTypingTimeout = null;
         let totalTextLength = 0;
-        let typedTextLength = 0; // Total characters typed so far
-
-        // Variables to save typing progress for pause/resume
+        let typedTextLength = 0;
         let currentResponseText = '';
-        let currentLanguage = null;
-        let currentLatinIndex = 0; // Character index to resume from (for Latin)
-        let currentCJKBlockIndex = 0; // Block index to resume from (for CJK)
-        let cjkBlocks = []; // Store CJK blocks when typing CJK
-
-
+        let currentCharacterIndex = 0;
+    
         const responseElement = document.getElementById('response');
-        const languageDisplay = document.getElementById('language-display');
         const typingIndicator = document.getElementById('typing-status');
         const userInputElement = document.getElementById('user-input');
         const languageConfigsDiv = document.getElementById('language-configs');
@@ -876,69 +870,54 @@
         const sendButton = document.querySelector('.button-group button:not(#stop-button):not(#pause-resume-button)');
         const pauseResumeButton = document.getElementById('pause-resume-button');
         const progressBar = document.getElementById('progress-bar');
-        const configPopup = document.getElementById('config-popup'); // Get the popup element
-        const modalBackdrop = document.getElementById('modal-backdrop'); // Get the backdrop element
-
-
-        // Initial button states
+        const configPopup = document.getElementById('config-popup');
+        const modalBackdrop = document.getElementById('modal-backdrop');
+    
         stopButton.disabled = true;
         pauseResumeButton.disabled = true;
-
-
-        // Function to populate config panel UI
+    
         function populateConfigPanel() {
-            languageConfigsDiv.innerHTML = ''; // Clear existing
-            for (const langKey in LANGUAGE_CONFIGS) {
-                const config = LANGUAGE_CONFIGS[langKey];
-                const div = document.createElement('div');
-                 // Structure for better layout: Language Name | Base Speed Input Group | Pause Multiplier Input Group
-                div.innerHTML = `
-                    <label>${config.name}:</label> <div class="speed-input-group">
-                         <label for="${langKey}-baseSpeed">Base Speed:</label>
-                         <input type="number" id="${langKey}-baseSpeed" value="${config.baseSpeed}" min="10">
-                    </div>
-                    <div class="pause-input-group">
-                         <label for="${langKey}-pauseMultiplier">Pause Multiplier:</label>
-                         <input type="number" id="${langKey}-pauseMultiplier" value="${config.pauseMultiplier}" step="0.1" min="0.1">
-                    </div>
-                `;
-                languageConfigsDiv.appendChild(div);
-
-                // Add event listeners to update config when changed
-                document.getElementById(`${langKey}-baseSpeed`).addEventListener('change', (e) => {
-                    const value = parseInt(e.target.value);
-                    if (!isNaN(value)) LANGUAGE_CONFIGS[langKey].baseSpeed = value;
-                });
-                 document.getElementById(`${langKey}-pauseMultiplier`).addEventListener('change', (e) => {
-                     const value = parseFloat(e.target.value);
-                    if (!isNaN(value)) LANGUAGE_CONFIGS[langKey].pauseMultiplier = value;
-                });
-            }
+            languageConfigsDiv.innerHTML = '';
+            const config = GLOBAL_TYPING_CONFIG;
+    
+            const div = document.createElement('div');
+            div.innerHTML = `
+                <label>${config.name} Configuration:</label>
+                <div class="speed-input-group">
+                    <label for="global-baseSpeed">Base Speed (ms per char):</label>
+                    <input type="number" id="global-baseSpeed" value="${config.baseSpeed}" min="10">
+                </div>
+                <div class="pause-input-group">
+                    <label for="global-punctuationPauseMultiplier">Punctuation Pause Multiplier:</label>
+                    <input type="number" id="global-punctuationPauseMultiplier" value="${config.punctuationPauseMultiplier}" step="0.1" min="0.1">
+                </div>
+            `;
+            languageConfigsDiv.appendChild(div);
+    
+            document.getElementById('global-baseSpeed').addEventListener('change', (e) => {
+                const value = parseInt(e.target.value);
+                if (!isNaN(value)) GLOBAL_TYPING_CONFIG.baseSpeed = value;
+            });
+    
+            document.getElementById('global-punctuationPauseMultiplier').addEventListener('change', (e) => {
+                const value = parseFloat(e.target.value);
+                if (!isNaN(value)) GLOBAL_TYPING_CONFIG.punctuationPauseMultiplier = value;
+            });
         }
-
-        // Populate config panel on load
+    
         populateConfigPanel();
-
-        // Helper to reset all progress and state variables and UI
+    
         function resetProgressVariables() {
             isTyping = false;
             isPaused = false;
-            if (currentTypingTimeout) {
-                 clearTimeout(currentTypingTimeout);
-                 currentTypingTimeout = null;
-            }
+            if (currentTypingTimeout) clearTimeout(currentTypingTimeout);
+            currentTypingTimeout = null;
             currentResponseText = '';
-            currentLanguage = null;
-            currentLatinIndex = 0;
-            currentCJKBlockIndex = 0;
-            cjkBlocks = [];
+            currentCharacterIndex = 0;
             totalTextLength = 0;
             typedTextLength = 0;
-
-            // Reset UI elements
-            responseElement.innerHTML = '';
+    
             progressBar.style.width = '0%';
-            languageDisplay.textContent = 'Detected language: -';
             typingIndicator.classList.remove('visible');
             typingIndicator.textContent = 'Thinking and typing...';
             stopButton.disabled = true;
@@ -946,199 +925,59 @@
             pauseResumeButton.textContent = 'Pause Typing';
             sendButton.disabled = false;
         }
-
-
+    
         function generateResponse() {
             const userInput = userInputElement.value.trim();
             if (!userInput || isTyping) return;
-
-            resetProgressVariables(); // Reset state at the start of a new generation
-
-            // Detect language
-            currentLanguage = detectLanguage(userInput);
-            languageDisplay.textContent = `Detected language: ${currentLanguage.name}`;
-
-            // Generate appropriate response
-            currentResponseText = createResponseText(userInput, currentLanguage);
+    
+            resetProgressVariables();
+    
+            currentResponseText = userInput;
             totalTextLength = currentResponseText.length;
-
+    
             typingIndicator.classList.add('visible');
             isTyping = true;
-            isPaused = false;
             stopButton.disabled = false;
             pauseResumeButton.disabled = false;
             pauseResumeButton.textContent = 'Pause Typing';
             sendButton.disabled = true;
-            userInputElement.value = ''; // Clear input after getting code
-
-            // Start typing with initial thinking delay
+            userInputElement.value = '';
+    
             setTimeout(() => {
-                if (currentLanguage !== LANGUAGE_CONFIGS.ENGLISH) {
-                    cjkBlocks = splitIntoSemanticBlocks(currentResponseText, currentLanguage);
-                    // Start CJK typing from block index 0
-                    typeCJKText(responseElement, currentResponseText, currentLanguage, cjkBlocks, currentCJKBlockIndex, () => {
-                         // Typing finished callback
-                         resetProgressVariables();
-                    });
-                } else {
-                     typeLatinText(responseElement, currentResponseText, currentLanguage, currentLatinIndex, () => {
-                        // Typing finished callback
-                        resetProgressVariables();
-                     });
-                }
-            }, 800); // Initial thinking delay
+                typeCharacter(responseElement, currentResponseText, currentCharacterIndex, () => {
+                    resetProgressVariables();
+                });
+            }, 800);
         }
-
+    
         function stopTyping() {
-            resetProgressVariables(); // Full reset on stop
+            resetProgressVariables();
         }
-
+    
         function togglePauseResume() {
             if (!isTyping) return;
-
-            if (isPaused) {
-                resumeTyping();
-            } else {
-                pauseTyping();
-            }
+            isPaused ? resumeTyping() : pauseTyping();
         }
-
+    
         function pauseTyping() {
-            if (currentTypingTimeout) {
-                clearTimeout(currentTypingTimeout);
-                currentTypingTimeout = null;
-            }
+            if (currentTypingTimeout) clearTimeout(currentTypingTimeout);
             isPaused = true;
             typingIndicator.textContent = 'Paused...';
             pauseResumeButton.textContent = 'Resume Typing';
-
-            // Calculate and save the current progress index based on typedTextLength
-            if (currentLanguage !== LANGUAGE_CONFIGS.ENGLISH) {
-                let charCount = 0;
-                currentCJKBlockIndex = 0;
-                for (let i = 0; i < cjkBlocks.length; i++) {
-                    charCount += cjkBlocks[i].length;
-                    if (typedTextLength <= charCount && typedTextLength > 0) {
-                        currentCJKBlockIndex = i;
-                        break;
-                    }
-                     if (typedTextLength > 0 && typedTextLength === charCount && i < cjkBlocks.length -1) {
-                          currentCJKBlockIndex = i + 1;
-                          break;
-                     }
-                     if (i === cjkBlocks.length - 1 && typedTextLength >= totalTextLength) {
-                         currentCJKBlockIndex = cjkBlocks.length;
-                     }
-                }
-                 if (typedTextLength === 0 && cjkBlocks.length > 0) currentCJKBlockIndex = 0;
-
-
-            } else {
-                currentLatinIndex = typedTextLength;
-            }
-             console.log("Paused. Saved Latin Index:", currentLatinIndex, "Saved CJK Index:", currentCJKBlockIndex, "Typed Length:", typedTextLength);
         }
-
+    
         function resumeTyping() {
-             console.log("Resuming. Starting Latin Index:", currentLatinIndex, "Starting CJK Index:", currentCJKBlockIndex);
             isPaused = false;
             typingIndicator.textContent = 'Typing...';
             pauseResumeButton.textContent = 'Pause Typing';
-
-            if (currentLanguage !== LANGUAGE_CONFIGS.ENGLISH) {
-                 typeCJKText(responseElement, currentResponseText, currentLanguage, cjkBlocks, currentCJKBlockIndex, () => {
-                    console.log("CJK Typing finished after resuming.");
-                    resetProgressVariables();
-                 });
-            } else {
-                 typeLatinText(responseElement, currentResponseText, currentLanguage, currentLatinIndex, () => {
-                     console.log("Latin Typing finished after resuming.");
-                    resetProgressVariables();
-                 });
-            }
+    
+            typeCharacter(responseElement, currentResponseText, currentCharacterIndex, () => {
+                resetProgressVariables();
+            });
         }
-
-
-        function detectLanguage(text) {
-            const chineseChars = (text.match(/[\p{Script=Han}]/gu) || []).length;
-            const japaneseChars = (text.match(/[\p{Script=Hiragana}\p{Script=Katakana}]/gu) || []).length;
-            const koreanChars = (text.match(/[\p{Script=Hangul}]/gu) || []).length;
-            const totalCJK = chineseChars + japaneseChars + koreanChars;
-            const totalChars = text.length;
-
-            if (totalCJK === 0) return LANGUAGE_CONFIGS.ENGLISH;
-            if (totalCJK / totalChars < 0.3) return LANGUAGE_CONFIGS.MIXED;
-
-            if (chineseChars > japaneseChars && chineseChars > koreanChars) return LANGUAGE_CONFIGS.CHINESE;
-            if (japaneseChars > chineseChars && japaneseChars > koreanChars) return LANGUAGE_CONFIGS.JAPANESE;
-            if (koreanChars > chineseChars && koreanChars > japaneseChars) return LANGUAGE_CONFIGS.KOREAN;
-
-            return LANGUAGE_CONFIGS.MIXED;
-        }
-
-        function createResponseText(input, language) {
-             const responses = {
-                [LANGUAGE_CONFIGS.ENGLISH.name]:
-                    `Regarding "${input}"...\n\n` +
-                    `After careful consideration, here's what I've found:\n\n` +
-                    `• First, the fundamental concept revolves around ${input.split(' ')[0]}\n` +
-                    `• Practically speaking, this applies to several domains\n` +
-                    `• Interestingly, recent developments suggest new possibilities\n\n` +
-                    `Let me elaborate on these points individually.`,
-
-                [LANGUAGE_CONFIGS.CHINESE.name]:
-                    `关于【${input}】的分析：\n\n` +
-                    `经过深入研究，我发现以下要点：\n\n` +
-                    `• 首先，核心概念与${input.slice(0, 2)}密切相关\n` +
-                    `• 实际应用方面，体现在多个领域\n` +
-                    `• 值得注意的是，最新研究揭示了新的方向\n\n` +
-                    `下面我将详细展开说明。`,
-
-                [LANGUAGE_CONFIGS.JAPANESE.name]:
-                    `「${input}」に関する分析結果：\n\n` +
-                    `詳細に検討した結果、以下の点がわかりました：\n\n` +
-                    `• まず、基本概念は${input.slice(0, 2)}に関連しています\n` +
-                    `• 実際の応用分野は多岐にわたります\n` +
-                    `• 特に興味深いのは、最新研究で新たな可能性が示唆されている点です\n\n` +
-                    `それぞれ詳しく説明していきます。`,
-
-                [LANGUAGE_CONFIGS.KOREAN.name]:
-                    `"${input}"에 대한 분석 결과:\n\n` +
-                    `심층적으로 연구한 결과 다음과 같은 사항을 발견했습니다:\n\n` +
-                    `• 첫째, 핵심 개념은 ${input.slice(0, 1)}와 관련이 있습니다\n` +
-                    `• 실제 적용은 여러 분야에서 볼 수 있습니다\n` +
-                    `• 특히 주목할 만한 것은 최근 연구에서 새로운 가능성이 제시되었다는 점입니다\n\n` +
-                    `각 항목에 대해 자세히 설명드리겠습니다.`,
-
-                [LANGUAGE_CONFIGS.MIXED.name]:
-                    `Regarding your query "${input}" (多语言输入)\n\n` +
-                    `分析发现以下重要方面 / Analysis revealed these key aspects:\n\n` +
-                    `• 核心概念 / Core concept: ${input.split(' ')[0].slice(0, 3)}\n` +
-                    `• 应用领域 / Application fields\n` +
-                    `• 最新动向 / Recent developments\n\n` +
-                    `下面详细说明 / Let me elaborate...`
-            };
-
-            return responses[language.name] || responses[LANGUAGE_CONFIGS.ENGLISH.name];
-        }
-
-        // Simplified typeText function - initial call only
-        function typeText(element, text, language, index, callback) {
-            if (language !== LANGUAGE_CONFIGS.ENGLISH) {
-                 typeCJKText(element, text, language, cjkBlocks, index, callback);
-            } else {
-                 typeLatinText(element, text, language, index, callback);
-            }
-        }
-
-
-        function typeLatinText(element, text, language, index, callback) {
-             // Stop if paused
-            if (isPaused) {
-                 return;
-            }
-
-            // Ensure we don't exceed text length
+    
+        function typeCharacter(element, text, index, callback) {
+            if (isPaused) return;
             if (index >= text.length) {
                 typedTextLength = totalTextLength;
                 element.innerHTML = text;
@@ -1146,227 +985,85 @@
                 if (callback) callback();
                 return;
             }
-
-            typedTextLength = index + 1; // Update total typed characters
+    
+            currentCharacterIndex = index;
+            typedTextLength = index + 1;
             element.innerHTML = text.substring(0, typedTextLength) + '<span class="cursor"></span>';
             scrollToBottom(element);
             updateProgressBar();
-
+    
             const char = text[index];
-            let charType;
-            if (/[a-zA-Z0-9]/.test(char)) charType = 'alphanumeric';
-            else if (/[.,;!?、，．！？]/.test(char)) charType = 'punctuation';
-            else if (char === ' ' || char === '\n') charType = 'whitespace';
-            else charType = 'other';
-
-            let baseSpeedAdjustment;
-            switch (charType) {
-                case 'alphanumeric': baseSpeedAdjustment = 0.8 + Math.random() * 0.4; break;
-                case 'punctuation':  baseSpeedAdjustment = 3.0 + Math.random() * 2.0; break;
-                case 'whitespace':   baseSpeedAdjustment = 1.0 + Math.random() * 0.5; break;
-                default:             baseSpeedAdjustment = 1.2 + Math.random() * 0.6; break;
-            }
-
-            let delay = language.baseSpeed * baseSpeedAdjustment * language.pauseMultiplier;
-
-            if (index > 0) {
-                 const prevChar = text[index - 1];
-                 let lastCharType;
-                 if (/[a-zA-Z0-9]/.test(prevChar)) lastCharType = 'alphanumeric';
-                 else if (/[.,;!?、，．！？]/.test(prevChar)) lastCharType = 'punctuation';
-                 else if (prevChar === ' ' || prevChar === '\n') lastCharType = 'whitespace';
-                 else lastCharType = 'other';
-
-                if (lastCharType === 'punctuation' && charType !== 'whitespace') {
-                    delay *= 1.3;
-                }
-            }
-
-            if (Math.random() < 0.1) {
-                delay *= 1.5 + Math.random();
-            }
-
-             currentTypingTimeout = setTimeout(() => {
-                typeLatinText(element, text, language, index + 1, callback);
-            }, delay);
-        }
-
-        // Modified typeCJKText to use the provided starting block index and enhance MIXED typing
-        function typeCJKText(element, text, language, blocks, currentIndex, callback) {
-             // Stop if paused
-             if (isPaused) {
-                 return;
-            }
-
-            if (currentIndex >= blocks.length) {
-                typedTextLength = totalTextLength;
-                element.innerHTML = text;
-                updateProgressBar();
-                if (callback) callback();
-                return;
-            }
-
-            const currentText = blocks.slice(0, currentIndex + 1).join('');
-            typedTextLength = currentText.length; // Update total typed characters
-            element.innerHTML = currentText + '<span class="cursor"></span>';
-            scrollToBottom(element);
-            updateProgressBar();
-
-            const block = blocks[currentIndex];
-
-            let blockType;
-            const isLatinBlock = /^[a-zA-Z0-9\s',.\-!?]+$/.test(block); /* Check if block is mostly Latin */
-            const isPunctuationBlock = /^[.,;!?。、，．！？]+$/.test(block); /* Check if block is mostly punctuation */
-            const isWhitespaceBlock = /^\s+$/.test(block); /* Check if block is mostly whitespace */
-
-
-            if (isPunctuationBlock) blockType = 'punctuation';
-            else if (isWhitespaceBlock) blockType = 'whitespace';
-            else if (isLatinBlock) blockType = 'latin-word';
-            else if (isCJKBlock(block)) blockType = 'cjk-block';
-            else if (block.match(/[\n]/)) blockType = 'newline';
-            else blockType = 'other';
-
-
-            let baseSpeedAdjustment;
-            if (language === LANGUAGE_CONFIGS.MIXED) {
-                 // More nuanced speeds for MIXED language
-                 switch (blockType) {
-                     case 'punctuation':  baseSpeedAdjustment = 2.5 + Math.random() * 1.5; break; /* Faster punctuation in mixed? */
-                     case 'whitespace':   baseSpeedAdjustment = 0.8 + Math.random() * 0.4; break;
-                     case 'latin-word':   baseSpeedAdjustment = 0.6 + Math.random() * 0.3; break; /* Faster for Latin words in mixed */
-                     case 'cjk-block':    baseSpeedAdjustment = 0.9 + Math.random() * 0.5; break; /* Slightly varied for CJK blocks in mixed */
-                     case 'newline':      baseSpeedAdjustment = 1.0 + Math.random() * 0.5; break;
-                     default:             baseSpeedAdjustment = 0.7 + Math.random() * 0.4; break;
-                 }
-            } else {
-                 // Original speeds for single CJK languages
-                 switch (blockType) {
-                     case 'punctuation':  baseSpeedAdjustment = 3.0 + Math.random() * 2.0; break;
-                     case 'whitespace':   baseSpeedAdjustment = 1.0 + Math.random() * 0.5; break;
-                     case 'cjk-block':    baseSpeedAdjustment = 0.8 + Math.random() * 0.5; break;
-                     case 'newline':      baseSpeedAdjustment = 1.2 + Math.random() * 0.6; break;
-                     default:             baseSpeedAdjustment = 1.0 + Math.random() * 0.4; break;
-                 }
+            let delay = GLOBAL_TYPING_CONFIG.baseSpeed;
+    
+            if (/[a-zA-Z]/.test(char)) {
+                delay = GLOBAL_TYPING_CONFIG.languageSpeeds['LATIN'];
+            } else if (/[0-9]/.test(char)) {
+                delay *= 1.1;
+            } else if (/[。、，．！？.,!?]/.test(char)) {
+                delay *= GLOBAL_TYPING_CONFIG.punctuationPauseMultiplier;
+            } else if (/[はがのをにでへと]/.test(char)) {
+                delay *= 1.2;
+            } else if (/[가-힣]/.test(char)) {
+                delay = GLOBAL_TYPING_CONFIG.languageSpeeds['KOREAN'];
+            } else if (char === '\n') {
+                delay *= 4; // Lebih lama untuk ganti baris
+            } else if (text.slice(index, index + 2) === '  ') {
+                delay *= 2.5; // Jeda tambahan untuk dua spasi
             }
 
 
-            let delay = language.baseSpeed * baseSpeedAdjustment * language.pauseMultiplier;
-
-            // Contextual pauses (apply to all CJK/MIXED)
-            if (currentIndex > 0) {
-                 const prevBlock = blocks[currentIndex - 1];
-                 const isPrevPunctuation = /^[.,;!?。、，．！？]+$/.test(prevBlock);
-                 const isPrevSentenceEnd = /^[。？！]+$/.test(prevBlock);
-
-                 if (isPrevSentenceEnd) {
-                    delay *= 1.5 + Math.random(); /* Longer pause after sentence end */
-                 } else if (isPrevPunctuation) {
-                    delay *= 1.2 + Math.random() * 0.5; /* Moderate pause after other punctuation */
-                 }
+    
+            if (Math.random() < 0.08) {
+                delay += GLOBAL_TYPING_CONFIG.baseSpeed * (0.5 + Math.random());
             }
-
-
-            // Add occasional human-like pauses (apply to all CJK/MIXED)
-            if (Math.random() < 0.15) {
-                delay *= 1.3 + Math.random();
-            }
-
-            // Language-specific fine-tuning (apply only to specific languages)
-            if (language === LANGUAGE_CONFIGS.JAPANESE) {
-                if (block.match(/[はがのをにでへと]/)) delay *= 0.8;
-                if (block.match(/[\p{Script=Han}]{2,}/u)) delay *= 1.2;
-            } else if (language === LANGUAGE_CONFIGS.CHINESE) {
-                if (block.length > 2 && blockType === 'cjk-block') delay *= Math.min(1.5, 1 + block.length * 0.1);
-            }
-
-
+    
             currentTypingTimeout = setTimeout(() => {
-                typeCJKText(element, text, language, blocks, currentIndex + 1, callback);
+                typeCharacter(element, text, index + 1, callback);
             }, delay);
         }
-
-
-        function splitIntoSemanticBlocks(text, language) {
-            // The existing segmentation regex for MIXED should be able to separate Latin words from CJK
-             if (language === LANGUAGE_CONFIGS.JAPANESE) {
-                return text.match(/([\p{Script=Hiragana}\p{Script=Katakana}]+[\p{Script=Hiragana}]*[はがのをにでへと]?|[\p{Script=Han}]{1,3}(?:[\p{Script=Hiragana}]{1,3})?|[\w']+|\s+|[^\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}\w\s。、，．！？])/gu) || [];
-            } else if (language === LANGUAGE_CONFIGS.CHINESE) {
-                return text.match(/([\p{Script=Han}]{1,4}|[\w']+|\s+|[^\p{Script=Han}\w\s。、，．！？])/gu) || [];
-            } else if (language === LANGUAGE_CONFIGS.KOREAN) {
-                return text.match(/([\p{Script=Hangul}]+(?:\s*[\p{Script=Hangul}]+)*|[\w']+|\s+|[^\p{Script=Hangul}\w\s。、，．！？])/gu) || [];
-            }
-            // This regex for MIXED splits into sequences of CJK, or words, or whitespace, or other symbols
-            return text.match(/([\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]+|[\w']+|\s+|[^\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\w\s。、，．！？])/gu) || [];
-        }
-
-
-        function isCJKBlock(block) {
-            return /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(block);
-        }
-
+    
         function scrollToBottom(element) {
             element.scrollTop = element.scrollHeight;
         }
-
+    
         function updateProgressBar() {
-            if (totalTextLength > 0) {
-                const progress = (typedTextLength / totalTextLength) * 100;
-                progressBar.style.width = `${progress}%`;
-            } else {
-                 progressBar.style.width = '0%';
-            }
+            const progress = totalTextLength > 0
+                ? (typedTextLength / totalTextLength) * 100
+                : 0;
+            progressBar.style.width = `${progress}%`;
         }
-
+    
         function toggleDarkMode() {
             document.body.classList.toggle('dark-mode');
-            if (document.body.classList.contains('dark-mode')) {
-                localStorage.setItem('darkMode', 'enabled');
-            } else {
-                localStorage.setItem('darkMode', 'disabled');
-            }
-             updateDarkModeButtonIcon(); // Update the icon when toggled
+            localStorage.setItem('darkMode', document.body.classList.contains('dark-mode') ? 'enabled' : 'disabled');
+            updateDarkModeButtonIcon();
         }
-
-        // Function to update the dark mode button icon and text
+    
         function updateDarkModeButtonIcon() {
             const darkModeButton = document.querySelector('#config-popup .dark-mode-toggle button');
-            if (darkModeButton) { /* Check if button exists before updating */
-                if (document.body.classList.contains('dark-mode')) {
-                    darkModeButton.innerHTML = '<i class="fas fa-sun"></i> Toggle Light Mode';
-                } else {
-                    darkModeButton.innerHTML = '<i class="fas fa-moon"></i> Toggle Dark Mode';
-                }
-            }
+            if (!darkModeButton) return;
+    
+            darkModeButton.innerHTML = document.body.classList.contains('dark-mode')
+                ? '<i class="fas fa-sun"></i> Toggle Light Mode'
+                : '<i class="fas fa-moon"></i> Toggle Dark Mode';
         }
-
-
-        // Function to toggle the visibility of the config popup and backdrop
+    
         function toggleConfigPopup() {
             configPopup.classList.toggle('visible');
-            modalBackdrop.classList.toggle('visible'); // Toggle backdrop visibility
-             if (configPopup.classList.contains('visible')) {
-                 updateDarkModeButtonIcon(); // Update icon when popup is opened
-             }
+            modalBackdrop.classList.toggle('visible');
+            if (configPopup.classList.contains('visible')) updateDarkModeButtonIcon();
         }
-
-
-        // Check for saved dark mode preference on load
+    
         if (localStorage.getItem('darkMode') === 'enabled') {
             document.body.classList.add('dark-mode');
         }
-         // Initial icon update on page load
-         updateDarkModeButtonIcon();
-
-
-         // Close popup if clicked outside (optional, using backdrop click)
-        modalBackdrop.addEventListener('click', function() {
-             if (configPopup.classList.contains('visible')) {
-                 toggleConfigPopup(); // Close popup when backdrop is clicked
-             }
+    
+        updateDarkModeButtonIcon();
+    
+        modalBackdrop.addEventListener('click', () => {
+            if (configPopup.classList.contains('visible')) toggleConfigPopup();
         });
-
-
     </script>
+    
 </body>
 </html>
